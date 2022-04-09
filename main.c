@@ -125,7 +125,17 @@
 #undef TCHAR
 #undef Tprintf
 #undef fTprintf
+#undef putTchar
+#undef PRIsT
+#undef Tmemcpy
+#undef Tmemcmp
+#undef Tstrlen
+#undef Tstrcmp
+#undef Tstrrchr
 #undef Tmain
+#undef SLASH
+#undef PRIm
+#undef _ARGm
 #ifdef TARGET_NT
 #define T(x)     L##x
 #define TCHAR    WCHAR
@@ -163,7 +173,7 @@
 #ifdef TARGET_NT
 #define STAT_TIME_T FILETIME
 #elif (defined(HAVE_STRUCT_STAT_ST_TIMENSEC) || \
-       defined(HAVE_STRUCT_STAT_ST_TIM) ||  \
+       defined(HAVE_STRUCT_STAT_ST_TIM) ||      \
        defined(HAVE_STRUCT_STAT_ST_TIMESPEC))
 #define STAT_TIME_T_IS_TIMESPEC
 #define STAT_TIME_T struct timespec
@@ -237,7 +247,7 @@ static void dont_update_atime(HANDLE hFile) {
 
 
 
-/* Mask of attributse we care about. */
+/* Mask of attributes we care about. */
 #ifdef TARGET_NT
 #define INODE_ATTR_MASK \
 	(FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)
@@ -397,7 +407,7 @@ static void ftab_add_byspec(struct fs_inode *__restrict ino) {
 	++ftab.ft_byspec_c;
 }
 
-/* Add `ino' to the by-spec table. */
+/* Add `ino' to the by-name table. */
 static bool ftab_add_byname(struct fs_dirent *__restrict ent,
                             size_t lo, size_t hi,
                             size_t prefix_len) {
@@ -1027,6 +1037,7 @@ static void usage(void) {
 	        T("  -P,  --physical\n")
 	        T("       --action=hardlink  Merge duplicate files via hardlinks (oldest mtime is used for unify)\n")
 	        T("Example:\n")
+	        T("   dupfinder .            Print groups of identical files that can be merged via hardlinks\n")
 	        T("   dupfinder -P .         Find identical files from current directory and merge via hardlinks\n")
 	        T("   dupfinder -ro .        Print system calls needed to merge identical files from current directory\n")
 	);
