@@ -989,47 +989,61 @@ static void hardlink_group(struct fs_inode **files_v, size_t files_c) {
 	/* Now go through all of the other files and replace them with hardlinks. */
 	for (i = 1; i < files_c; ++i) {
 		struct fs_inode *other = files_v[i];
-		TCHAR *sActual, *sBackup;
-		hardlink_backup_filename(other->i_dirent->fd_name, &sActual, &sBackup);
-		if (other->i_dirent->fd_name != sBackup) {
-			/* Rename the file into its backup name */
-			if (!verbose_MoveFile(other->i_dirent->fd_name, sBackup)) {
+		struct fs_dirent *other_dirent = other->i_dirent;
+		assert(other_dirent);
+		/* Must rename all directory entries under which the other file can be addressed. */
+		for (;;) {
+			TCHAR *sActual, *sBackup;
+			hardlink_backup_filename(other_dirent->fd_name, &sActual, &sBackup);
+			if (other_dirent->fd_name != sBackup) {
+				/* Rename the file into its backup name */
+				if (!verbose_MoveFile(other_dirent->fd_name, sBackup)) {
 err_hardlink:
-				if (sActual != other->i_dirent->fd_name)
-					free(sActual);
-				if (sBackup != other->i_dirent->fd_name)
-					free(sBackup);
-				return;
+					if (sActual != other_dirent->fd_name)
+						free(sActual);
+					if (sBackup != other_dirent->fd_name)
+						free(sBackup);
+					return;
+				}
 			}
-		}
-
-		/* Create the hardlink. */
-		if (verbose) {
+	
+			/* Create the hardlink. */
+			if (verbose) {
 #ifdef TARGET_NT
-			Tprintf(T("dupfinder: verbose: ") S_CreateHardLink T("(from: \"%") PRIsT T("\", to: \"%") PRIsT T("\")\n"),
-			        sFirstFile, sActual);
+				Tprintf(T("dupfinder: verbose: ") S_CreateHardLink T("(from: \"%") PRIsT T("\", to: \"%") PRIsT T("\")\n"),
+				        sFirstFile, sActual);
 #else /* TARGET_NT */
-			Tprintf(T("dupfinder: verbose: ") S_CreateHardLink T("(to: \"%") PRIsT T("\", from: \"%") PRIsT T("\")\n"),
-			        sActual, sFirstFile);
+				Tprintf(T("dupfinder: verbose: ") S_CreateHardLink T("(to: \"%") PRIsT T("\", from: \"%") PRIsT T("\")\n"),
+				        sActual, sFirstFile);
 #endif /* !TARGET_NT */
-		}
-		if (!readonly) {
-			if (!CreateHardLink(sActual, sFirstFile, NULL)) {
-				fTprintf(stderr, T("dupfinder: error: failed to create hardlink '%") PRIsT T("' (to: '%") PRIsT T("'): %") PRIm T("\n"),
-				         sActual, sFirstFile _ARGm);
-				goto err_hardlink;
 			}
-		}
-
-		/* And finally, delete the previously created backup */
-		if (verbose)
-			Tprintf(T("dupfinder: verbose: ") S_DeleteFile T("(\"%") PRIsT T("\")\n"), sBackup);
-		if (!readonly) {
-			if (!DeleteFile(sBackup) && GetLastError() != ERROR_FILE_NOT_FOUND) {
-				fTprintf(stderr, T("dupfinder: error: failed to delete hardlink backup '%") PRIsT T("': %") PRIm T("\n"),
-				         sBackup _ARGm);
-				goto err_hardlink;
+			if (!readonly) {
+				if (!CreateHardLink(sActual, sFirstFile, NULL)) {
+					fTprintf(stderr, T("dupfinder: error: failed to create hardlink '%") PRIsT T("' (to: '%") PRIsT T("'): %") PRIm T("\n"),
+					         sActual, sFirstFile _ARGm);
+					/* Try to restore our backup */
+					verbose_MoveFile(sBackup, sActual);
+					goto err_hardlink;
+				}
 			}
+	
+			/* And finally, delete the previously created backup */
+			if (verbose)
+				Tprintf(T("dupfinder: verbose: ") S_DeleteFile T("(\"%") PRIsT T("\")\n"), sBackup);
+			if (!readonly) {
+				if (!DeleteFile(sBackup) && GetLastError() != ERROR_FILE_NOT_FOUND) {
+					fTprintf(stderr, T("dupfinder: error: failed to delete hardlink backup '%") PRIsT T("': %") PRIm T("\n"),
+					         sBackup _ARGm);
+					goto err_hardlink;
+				}
+			}
+			if (sActual != other_dirent->fd_name)
+				free(sActual);
+			if (sBackup != other_dirent->fd_name)
+				free(sBackup);
+			other_dirent = other_dirent->fd_next;
+			if (!other_dirent)
+				break;
 		}
 	}
 
@@ -1116,6 +1130,9 @@ int Tmain(int argc, TCHAR *argv[]) {
 		           Tstrcmp(arg, T("--physical")) == 0 ||
 		           Tstrcmp(arg, T("--action=hardlink")) == 0) {
 			dup_action = DUP_ACTION_HLINK;
+			/* TODO: --action=delete-old  (delete all but the oldest copy) */
+			/* TODO: --action=delete-new  (delete all but the newest copy) */
+			/* TODO: --action=commands    (print shell commands to do the linking) */
 		} else if (Tstrcmp(arg, T("--help")) == 0) {
 			usage();
 			exit(0);
@@ -1198,7 +1215,13 @@ int Tmain(int argc, TCHAR *argv[]) {
 							putTchar(T(','));
 						iter = ftab.ft_byspec_v[j]->i_dirent;
 						assert(iter);
-						Tprintf(T("\"%s\""), iter->fd_name);
+						for (;;) {
+							Tprintf(T("\"%s\""), iter->fd_name);
+							iter = iter->fd_next;
+							if (!iter)
+								break;
+							putTchar(T(','));
+						}
 					}
 					Tprintf(T("]\n"));
 				} else if (dup_action == DUP_ACTION_HLINK) {
