@@ -42,6 +42,7 @@
 #include <Windows.h>
 #include <direct.h>
 #include <io.h>
+#include <locale.h>
 #include <wchar.h>
 
 #undef SetCurrentDirectory
@@ -150,8 +151,8 @@
 #define Tstrrchr wcsrchr
 #define Tmain    wmain
 #define SLASH    L'\\'
-#define PRIm     L"lu"
-#define _ARGm    , (unsigned long)GetLastError()
+#define PRIm     L"ls (%lu)"
+#define _ARGm    , nt_strerror(GetLastError()), (unsigned long)GetLastError()
 #else /* TARGET_NT */
 #define T(x)     x
 #define TCHAR    char
@@ -204,6 +205,23 @@ extern "C" {
 #define memmoveup   memmove
 #define memmovedown memmove
 #endif /* !__USE_KOS */
+
+#ifdef TARGET_NT
+static WCHAR const *nt_strerror(unsigned long err) {
+	static WCHAR *p_oldreturn = NULL;
+	WCHAR *result;
+	if (p_oldreturn)
+		LocalFree(p_oldreturn);
+	if (!FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+	                    FORMAT_MESSAGE_FROM_SYSTEM,
+	                    NULL, err,
+	                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+	                    (LPWSTR)&result, 1, NULL))
+		return L"unknown error";
+	p_oldreturn = result;
+	return result;
+}
+#endif /* TARGET_NT */
 
 static void *xmalloc(size_t num_bytes) {
 	void *result = malloc(num_bytes);
@@ -1069,6 +1087,9 @@ int Tmain(int argc, TCHAR *argv[]) {
 		--argc;
 		++argv;
 	}
+#ifdef TARGET_NT
+	setlocale(LC_ALL, ".UTF8");
+#endif /* TARGET_NT */
 	while (argc && argv[0][0] == '-') {
 		TCHAR const *arg = argv[0];
 		++argv;
