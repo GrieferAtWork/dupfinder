@@ -185,7 +185,7 @@
 #ifdef TARGET_NT
 #define STAT_TIME_CMP(lhs, op, rhs) (CompareFileTime(lhs, rhs) op 0)
 #elif defined(STAT_TIME_T_IS_TIMESPEC)
-#define STAT_TIME_CMP(lhs, op, rhs) ((lhs)->tv_sec op (rhs)->tv_sec || ((lhs)->tv_nsec == (rhs)->tv_nsec && (lhs)->tv_nsec op (rhs)->tv_nsec))
+#define STAT_TIME_CMP(lhs, op, rhs) ((lhs)->tv_sec op (rhs)->tv_sec || ((lhs)->tv_sec == (rhs)->tv_sec && (lhs)->tv_nsec op (rhs)->tv_nsec))
 #else /* ... */
 #define STAT_TIME_CMP(lhs, op, rhs) (*(lhs) op *(rhs))
 #endif /* !... */
